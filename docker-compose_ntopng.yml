@@ -1,0 +1,46 @@
+version: '3' 
+
+services: 
+  redis: 
+    image: "asharam/redis:alpine-v1.0"
+    restart: always
+    network_mode: "host"
+  nprobe: 
+    privileged: true
+    network_mode: "host"
+    image: "codepunx/ntopng_docker:latest"
+    command: ['nprobe', '-u', 'br-lan','-Q', 'br-lan','-n','192.168.50.253:2055', '--collector-port', '2055', '--zmq', 'tcp://*:1234', '-T',"@NTOPNG@"] 
+    volumes:
+     - "/opt/docker/volumes/nprobe.license:/etc/nprobe.license:rw"
+    # ports: not availlable in HOST NETWORK MODE
+    #  - "2055:2055/udp"
+  ntopng: 
+    privileged: true
+    network_mode: "host"
+    image: "codepunx/ntopng_docker:latest"
+    command: ["ntopng", "-r", "192.168.50.253:6379", "-d", "/var/lib/ntopng", "-i","tcp://127.0.0.1:1234", "-i", "br-lan","-i", "pppoe-wan", "-m", "192.168.50.0/24", "-n", "1", "-u", "--community"] 
+    # ports: not availlable in HOST NETWORK MODE
+    #  - "3000:3000"
+    blkio_config:   # limit blkio pressure for low-end IOT devices TO RUN ntopng
+      weight: 200
+      weight_device: 
+        - path: /dev/vda
+          weight: 70
+      device_read_bps:
+        - path: /dev/vda
+          rate: '24mb'
+      device_read_iops:
+        - path: /dev/vda
+          rate: 240
+      device_write_bps:
+        - path: /dev/vda
+          rate: '48mb'
+      device_write_iops:
+        - path: /dev/vda
+          rate: 66
+    volumes:
+     - "/opt/docker/volumes/ntop_config:/etc/ntopng :rw"
+     - "/opt/docker/volumes/ntop_data:/var/lib/ntopng :rw"
+    depends_on: 
+     - nprobe
+     - redis
